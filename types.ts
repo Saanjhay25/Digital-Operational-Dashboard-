@@ -1,0 +1,45 @@
+
+export interface User {
+  id: string;
+  username: string;
+  role: 'admin' | 'operator';
+  status: 'active' | 'suspended';
+  lastLogin: string;
+  avatarUrl?: string;
+}
+
+export interface OperationalMetric {
+  name: string;
+  value: number;
+  unit: string;
+  trend: 'up' | 'down' | 'stable';
+  change: string;
+}
+
+export interface SystemIncident {
+  id: string;
+  title: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'active' | 'resolved' | 'monitoring';
+  timestamp: string;
+  affectedServices?: string[];
+  rootCause?: string;
+  resolutionSteps?: string[];
+}
+
+export interface OperationLog {
+  timestamp: string;
+  service: string;
+  event: string;
+  details: string;
+}
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  severity: 'info' | 'warning' | 'error' | 'success';
+  isRead: boolean;
+  category: string;
+}
