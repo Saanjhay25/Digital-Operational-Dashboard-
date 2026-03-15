@@ -1,5 +1,5 @@
+import { fetchApi } from '../utils/api';
 
-import { OpsDB } from './dbService';
 
 /**
  * AuthService
@@ -8,65 +8,111 @@ import { OpsDB } from './dbService';
  */
 export class AuthService {
   /**
-   * Authenticates a user.
+   * Authenticates a user connecting to the backend API.
    */
-  static async login(username: string, passwordPlain: string): Promise<{ success: boolean; user?: any; error?: string }> {
-    const user = await OpsDB.findUser(username);
-    
-    if (!user) {
-      return { success: false, error: 'Invalid username or password.' };
-    }
+  static async login(username: string, passwordPlain: string): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
+    try {
+      const response = await fetchApi('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: username, password: passwordPlain })
+      });
 
-    const inputHash = await OpsDB.hashString(passwordPlain);
-    
-    // Check password first
-    if (user.password !== inputHash) {
-      return { success: false, error: 'Invalid username or password.' };
-    }
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Non-JSON response received from login:', text.substring(0, 200));
+        return { success: false, error: 'Server returned an invalid response format. Please contact support.' };
+      }
 
-    // Check status if password is correct
-    if (user.status === 'suspended') {
-      return { 
-        success: false, 
-        error: 'Your account is suspended. Please contact admin.' 
+      if (!response.ok) {
+        return { success: false, error: data.message || 'Invalid Username Or Password' };
+      }
+
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+      }
+
+      return {
+        success: true,
+        user: {
+          name: data.name,
+          role: data.role,
+          username: data.username,
+          _id: data._id
+        },
+        token: data.token
       };
+    } catch (e: any) {
+      console.error('AuthService.login error:', e);
+      return { success: false, error: 'Server unreachable. Please ensure the backend is running.' };
     }
-
-    return { 
-      success: true, 
-      user: { 
-        username, 
-        role: user.role, 
-        avatarUrl: user.avatarUrl,
-        status: user.status
-      } 
-    };
   }
 
   /**
-   * Secure Password Update "API Route"
-   * Verifies current password, hashes new password, and enforces RBAC via OpsDB.
+   * Registers a new user connecting to the backend API.
    */
-  static async changePassword(username: string, currentPlain: string, newPlain: string, requesterRole: string): Promise<{ success: boolean; error?: string }> {
-    const user = await OpsDB.findUser(username);
-    if (!user) return { success: false, error: 'User record missing.' };
-
-    // 1. Verify Current Password
-    const currentHash = await OpsDB.hashString(currentPlain);
-    if (user.password !== currentHash) {
-      return { success: false, error: 'Current password verification failed.' };
-    }
-
-    // 2. Hash New Password (Simulating bcrypt logic)
-    const newHash = await OpsDB.hashString(newPlain);
-    
+  static async register(name: string, username: string, passwordPlain: string): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
     try {
-      // 3. Commit to database with requester role for RBAC check
-      await OpsDB.updateUser(username, { password: newHash }, requesterRole);
+      const response = await fetchApi('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ name, username, password: passwordPlain })
+      });
+
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Non-JSON response received from register:', text.substring(0, 200));
+        return { success: false, error: 'Server returned an invalid response format. Please contact support.' };
+      }
+
+      if (!response.ok) {
+        return { success: false, error: data.message || 'Registration failed.' };
+      }
+
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+      }
+
+      return {
+        success: true,
+        user: {
+          name: data.name,
+          role: data.role,
+          username: data.username,
+          _id: data._id
+        },
+        token: data.token
+      };
+    } catch (e: any) {
+      console.error('AuthService.register error:', e);
+      return { success: false, error: 'Network error or server is down.' };
+    }
+  }
+
+  /**
+   * Secure Password Update (Self)
+   */
+  static async changePassword(currentPlain: string, newPlain: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetchApi('/users/change-password', {
+        method: 'PUT',
+        body: JSON.stringify({ currentPassword: currentPlain, newPassword: newPlain })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        return { success: false, error: data.message || 'Password update failed.' };
+      }
+
       return { success: true };
     } catch (e: any) {
-      // 4. Handle middleware RBAC violations or DB failures
-      return { success: false, error: e.message || 'Critical database failure.' };
+      return { success: false, error: e.message || 'Critical connection failure.' };
     }
   }
 }

@@ -4,7 +4,7 @@ import { AuthService } from '../services/authService';
 import { SessionService } from '../services/sessionService';
 
 interface LoginFormProps {
-  onLogin: (username: string, role: 'admin' | 'operator') => void;
+  onLogin: (username: string, role: 'admin' | 'operator', mustChangePassword?: boolean) => void;
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
@@ -22,8 +22,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
     const result = await AuthService.login(username, password);
     
     if (result.success && result.user) {
-      SessionService.startSession(username, result.user.role);
-      onLogin(username, result.user.role);
+      // Logic handled by App.tsx through onLogin callback
+      SessionService.startSession(result.user.username, result.user.role);
+      onLogin(result.user.username, result.user.role, result.user.mustChangePassword);
     } else {
       setError(result.error || 'Authentication Failed');
       setIsLoading(false);
@@ -38,7 +39,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
             <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-white mb-2">OpsPulse</h1>
-          <p className="text-slate-500 text-sm font-medium uppercase tracking-[0.2em]">Digital Operational Dashboard</p>
+          <p className="text-slate-500 text-sm font-medium uppercase tracking-[0.2em]">Login to your Account</p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-10 rounded-[40px] shadow-2xl relative overflow-hidden">
@@ -52,9 +53,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                 type="text"
                 autoComplete="username"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setError('');
+                }}
                 className="block w-full px-5 py-4 bg-slate-800/50 border border-slate-700 rounded-2xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                placeholder="Enter the username"
+                placeholder="Enter your username"
               />
             </div>
 
@@ -66,8 +70,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full px-5 py-4 bg-slate-800/50 border border-slate-700 rounded-2xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-mono"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError('');
+                  }}
+                  className="block w-full px-5 py-4 bg-slate-800/50 border border-slate-700 rounded-2xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                   placeholder="Enter the password"
                 />
                 <button
@@ -85,7 +92,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
             </div>
 
             {error && (
-              <div className="p-4 rounded-2xl text-xs font-bold uppercase tracking-widest border bg-rose-500/10 text-rose-500 border-rose-500/20 animate-in slide-in-from-top-2 duration-300 flex items-start gap-3">
+              <div className="p-4 rounded-2xl text-xs font-bold tracking-widest border bg-rose-500/10 text-rose-500 border-rose-500/20 animate-in slide-in-from-top-2 duration-300 flex items-start gap-3">
                 <div className="mt-0.5">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 </div>

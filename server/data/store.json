@@ -1,0 +1,36 @@
+{
+    "users": {
+        "admin": {
+            "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+            "role": "admin",
+            "status": "active",
+            "avatarUrl": null
+        },
+        "operator": {
+            "password": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+            "role": "operator",
+            "status": "active",
+            "avatarUrl": null
+        }
+    },
+    "incidents": [
+        {
+            "id": "INC-402",
+            "title": "Postgres Connection Pool Exhausted",
+            "severity": "critical",
+            "status": "resolved",
+            "timestamp": "2023-10-25T10:00:00.000Z"
+        },
+        {
+            "id": "INC-403",
+            "title": "API Gateway High Latency",
+            "severity": "high",
+            "status": "active",
+            "timestamp": "2023-10-25T11:30:00.000Z"
+        }
+    ],
+    "config": {
+        "created_at": "2023-10-25T00:00:00.000Z",
+        "db_version": "6.0.0"
+    }
+}

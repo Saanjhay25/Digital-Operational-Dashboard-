@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { SystemIncident, User } from '../types';
-import { OpsDB } from '../services/dbService';
+import { UserService } from '../services/userService';
+import { IncidentService } from '../services/incidentService';
 
 interface SearchResultsProps {
   query: string;
@@ -15,21 +15,20 @@ const SearchResults: React.FC<SearchResultsProps> = ({ query, onNavigate, role }
 
   useEffect(() => {
     const fetchMatches = async () => {
-      const userList = await OpsDB.listAllUsers();
-      setUsers(userList.map((u, index) => ({
-        id: `USR-SEARCH-${index + 1}`, 
-        username: u.username, 
-        role: u.role || 'operator', 
-        status: u.status || 'active',
-        lastLogin: new Date().toISOString().split('T')[0]
-      })));
-      setIncidents([
-        { id: 'INC-402', title: 'Postgres Connection Pool Exhausted', severity: 'critical', status: 'resolved', timestamp: '2023-10-27 14:45:00' },
-        { id: 'INC-403', title: 'API Gateway High Latency (US-EAST-1)', severity: 'high', status: 'active', timestamp: '2023-10-27 15:12:30' },
-      ]);
+      try {
+        const incidentData = await IncidentService.getIncidents();
+        setIncidents(incidentData);
+        
+        if (role === 'admin') {
+            const userData = await UserService.getAllUsers();
+            setUsers(userData);
+        }
+      } catch (err) {
+        console.error('Search fetch failed:', err);
+      }
     };
     fetchMatches();
-  }, []);
+  }, [role]);
 
   const filteredIncidents = incidents.filter(i => 
     i.title.toLowerCase().includes(query.toLowerCase()) || 

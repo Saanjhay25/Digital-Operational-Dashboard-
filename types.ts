@@ -2,10 +2,14 @@
 export interface User {
   id: string;
   username: string;
+  name: string;
+  email?: string;
   role: 'admin' | 'operator';
   status: 'active' | 'suspended';
   lastLogin: string;
-  avatarUrl?: string;
+  profileImage?: string;
+  mustChangePassword?: boolean;
+  password?: string;
 }
 
 export interface OperationalMetric {
@@ -18,6 +22,7 @@ export interface OperationalMetric {
 
 export interface SystemIncident {
   id: string;
+  _id?: string;
   title: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   status: 'active' | 'resolved' | 'monitoring';

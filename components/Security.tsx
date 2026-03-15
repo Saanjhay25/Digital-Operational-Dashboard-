@@ -1,7 +1,21 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { DashboardService } from '../services/dashboardService';
 
 const Security: React.FC = () => {
+  const [accessLogs, setAccessLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      const result = await DashboardService.getLogs('access');
+      if (result.success && result.data) {
+        setAccessLogs(result.data.slice(0, 5));
+      }
+    };
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, []);
   return (
     <div className="p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
       <div>
@@ -30,11 +44,7 @@ const Security: React.FC = () => {
         <div className="bg-slate-800/50 border border-slate-700 p-8 rounded-3xl">
           <h3 className="text-white font-bold mb-4">Recent Access Logs</h3>
           <div className="space-y-4">
-            {[
-              { ip: '192.168.1.42', location: 'London, UK', status: 'Allowed' },
-              { ip: '10.0.4.128', location: 'Tokyo, JP', status: 'Blocked' },
-              { ip: '172.16.0.5', location: 'Internal VPN', status: 'Allowed' },
-            ].map((log, i) => (
+            {accessLogs.map((log, i) => (
               <div key={i} className="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-800">
                 <div>
                   <div className="text-sm font-mono text-white">{log.ip}</div>
@@ -47,6 +57,9 @@ const Security: React.FC = () => {
                 </span>
               </div>
             ))}
+            {accessLogs.length === 0 && (
+               <div className="text-slate-500 text-sm py-4">No recent access logs</div>
+            )}
           </div>
         </div>
       </div>

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { OpsDB } from '../services/dbService';
+import { fetchApi } from '../utils/api';
+import { UserService } from '../services/userService';
 
 interface UserManagementProps {
   currentRole: string;
@@ -29,6 +30,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
 
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [newRole, setNewRole] = useState<'admin' | 'operator'>('operator');
 
   useEffect(() => {
@@ -36,14 +38,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
   }, []);
 
   const loadUsers = async () => {
-    const userList = await OpsDB.listAllUsers();
-    setUsers(userList.map((u, index) => ({
-      id: `USR-00${index + 1}`,
-      username: u.username,
-      role: u.role || 'operator',
-      status: u.status || 'active',
-      lastLogin: new Date().toISOString().split('T')[0]
-    })));
+    try {
+      const userList = await UserService.getAllUsers();
+      setUsers(userList);
+    } catch (err: any) {
+      console.error('Failed to load users:', err);
+    }
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -51,14 +51,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
     if (!newUsername || !newPassword) return;
 
     try {
-      const existing = await OpsDB.findUser(newUsername);
-      if (existing) {
-        alert('Identity Conflict: This username is already registered.');
-        return;
-      }
-
-      const hashedPassword = await OpsDB.hashString(newPassword);
-      await OpsDB.addUser(newUsername, { password: hashedPassword, role: newRole }, 'admin');
+      await UserService.createUser({ 
+        username: newUsername, 
+        password: newPassword, 
+        role: newRole 
+      });
+      
       setIsAdding(false);
       setNewUsername('');
       setNewPassword('');
@@ -74,8 +72,49 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
       return;
     }
     try {
-      await OpsDB.toggleStatus(username, 'admin');
+      const user = users.find(u => u.username === username);
+      if (!user) return;
+      
+      await UserService.updateUser(username, { 
+        status: user.status === 'active' ? 'suspended' : 'active' 
+      });
       loadUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRoleChange = async (username: string, currentRole: string) => {
+    if (username === currentLoggedUser) {
+      alert('Action Denied: You cannot modify your own administrative role.');
+      return;
+    }
+    try {
+      await UserService.updateUser(username, { 
+        role: currentRole === 'admin' ? 'operator' : 'admin' 
+      });
+      loadUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleResetPassword = async (username: string) => {
+    const newPass = window.prompt(`Enter new password for ${username}:`, 'Reset@123');
+    if (!newPass) return;
+
+    try {
+      const response = await fetchApi(`/users/reset-password/${username}`, {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: newPass })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Reset failed');
+      }
+
+      alert(`Password for ${username} has been reset successfully.`);
     } catch (err: any) {
       alert(err.message);
     }
@@ -89,7 +128,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
     
     if (window.confirm(`Are you sure you want to PERMANENTLY delete user "${username}"?`)) {
       try {
-        await OpsDB.deleteUser(username, 'admin');
+        await UserService.deleteUser(username);
         loadUsers();
       } catch (err: any) {
         alert(err.message);
@@ -118,10 +157,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
       {isAdding && (
         <div className="bg-slate-900 border border-indigo-500/30 p-8 rounded-[32px] animate-in slide-in-from-top-4 duration-300 shadow-2xl">
           <h2 className="text-lg font-bold text-white mb-6">New User Provisioning</h2>
-          <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+          <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Username</label>
-              <input type="text" required value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter the username" />
+              <input type="text" required value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="johndoe" />
             </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">System Role</label>
@@ -132,7 +171,27 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
             </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Password</label>
-              <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" />
+              <div className="relative">
+                <input 
+                  type={showNewPassword ? 'text' : 'password'} 
+                  required 
+                  value={newPassword} 
+                  onChange={(e) => setNewPassword(e.target.value)} 
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="••••••••" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-400 transition-colors"
+                >
+                  {showNewPassword ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  )}
+                </button>
+              </div>
             </div>
             <div className="flex gap-2">
               <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold">Create</button>
@@ -181,6 +240,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
                   {user.username !== currentLoggedUser && (
                     <div className="flex items-center justify-end gap-3">
                       <button 
+                        onClick={() => handleRoleChange(user.username, user.role)}
+                        className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-xl border transition-all ${
+                          user.role === 'admin' 
+                            ? 'text-indigo-400 border-indigo-500/20 hover:bg-emerald-500 hover:text-white' 
+                            : 'text-emerald-400 border-emerald-500/20 hover:bg-indigo-500 hover:text-white'
+                        }`}
+                        title={user.role === 'admin' ? 'Demote to Operator' : 'Promote to Admin'}
+                      >
+                        {user.role === 'admin' ? 'Demote' : 'Promote'}
+                      </button>
+                      <button 
                         onClick={() => handleToggleStatus(user.username)}
                         className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-xl border transition-all ${
                           user.status === 'active' 
@@ -189,6 +259,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
                         }`}
                       >
                         {user.status === 'active' ? 'Suspend' : 'Activate'}
+                      </button>
+                      <button 
+                        onClick={() => handleResetPassword(user.username)}
+                        className="text-[10px] font-bold uppercase px-3 py-1.5 rounded-xl border border-slate-700 hover:bg-slate-700 transition-all text-slate-400"
+                        title="Reset User Password"
+                      >
+                        Reset
                       </button>
                       <button 
                         onClick={() => handleDeleteUser(user.username)}

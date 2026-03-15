@@ -5,13 +5,14 @@ interface HeaderProps {
   user?: string | null;
   role?: string | null;
   avatar?: string;
+  unreadCount?: number;
   onNavigate?: (view: string) => void;
   onSearch?: (query: string) => void;
   onAvatarChange?: (newUrl: string) => void;
   onLogout?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ user, role, avatar, onNavigate, onSearch, onAvatarChange, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ user, role, avatar, unreadCount = 0, onNavigate, onSearch, onAvatarChange, onLogout }) => {
   const [time, setTime] = useState(new Date());
   const [searchValue, setSearchValue] = useState('');
   const [use24Hour, setUse24Hour] = useState(false); // Default to AM/PM based on user request
@@ -81,7 +82,21 @@ const Header: React.FC<HeaderProps> = ({ user, role, avatar, onNavigate, onSearc
             </div>
           </div>
           
-          <div className="relative group">
+          <button 
+            onClick={() => onNavigate?.('Notifications')}
+            className="relative p-2 text-slate-400 hover:text-white transition-colors hover:bg-slate-800 rounded-lg group"
+          >
+            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-bold text-white shadow-lg ring-2 ring-slate-950">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+          
+          <div className="relative group ml-2">
             <div className="w-10 h-10 rounded-xl bg-slate-900 p-0.5 border border-slate-800 cursor-pointer hover:border-indigo-500 transition-all">
               <img
                 className="w-full h-full rounded-[10px] object-cover"

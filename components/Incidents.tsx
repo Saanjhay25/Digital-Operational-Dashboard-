@@ -1,5 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { fetchApi } from '../utils/api';
+import { IncidentService } from '../services/incidentService';
 import { SystemIncident } from '../types';
 
 interface IncidentsProps {
@@ -80,10 +82,14 @@ const INITIAL_INCIDENTS: SystemIncident[] = [
 ];
 
 const Incidents: React.FC<IncidentsProps> = ({ role }) => {
-  const [incidents, setIncidents] = useState<SystemIncident[]>(INITIAL_INCIDENTS);
+  const [incidents, setIncidents] = useState<SystemIncident[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'resolved' | 'monitoring'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  // Fetching State
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   
   // Reporting Modal State
   const [isReporting, setIsReporting] = useState(false);
@@ -95,31 +101,90 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
     rootCause: ''
   });
 
+  // Editing Modal State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingIncident, setEditingIncident] = useState<Partial<SystemIncident> | null>(null);
+
   const isAdmin = role === 'admin';
+
+  useEffect(() => {
+    fetchIncidents();
+  }, []);
+
+  const fetchIncidents = async () => {
+    try {
+      setIsLoading(true);
+      const data = await IncidentService.getIncidents();
+      setIncidents(data);
+    } catch (err: any) {
+      setError(err.message || 'Error connecting to database');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const handleReportSubmit = (e: React.FormEvent) => {
+  const handleEditClick = (incident: SystemIncident) => {
+    setEditingIncident(incident);
+    setIsEditing(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingIncident?.title) return;
+
+    try {
+      const idToUpdate = editingIncident.id || editingIncident._id;
+      if (!idToUpdate) return;
+      
+      const updatedIncident = await IncidentService.updateIncident(idToUpdate, {
+        title: editingIncident.title,
+        severity: editingIncident.severity,
+        status: editingIncident.status,
+        affectedServices: editingIncident.affectedServices,
+        rootCause: editingIncident.rootCause,
+        resolutionSteps: editingIncident.resolutionSteps
+      });
+
+      setIncidents(incidents.map(inc => (inc.id || inc._id) === (updatedIncident.id || updatedIncident._id) ? updatedIncident : inc));
+      setIsEditing(false);
+      setEditingIncident(null);
+    } catch (err: any) {
+      alert(`Error updating incident: ${err.message}`);
+    }
+  };
+
+  const handleAcknowledge = async (id: string) => {
+    try {
+      const updatedIncident = await IncidentService.updateIncident(id, { status: 'monitoring' });
+      setIncidents(incidents.map(inc => (inc.id || inc._id) === (updatedIncident.id || updatedIncident._id) ? updatedIncident : inc));
+    } catch (err: any) {
+      alert(`Error acknowledging incident: ${err.message}`);
+    }
+  };
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newIncident.title) return;
 
-    const nextIdNumber = Math.max(...incidents.map(i => parseInt(i.id.split('-')[1]))) + 1;
-    const report: SystemIncident = {
-      id: `INC-${nextIdNumber}`,
-      title: newIncident.title || 'Untitled Incident',
-      severity: newIncident.severity as any,
-      status: 'active',
-      timestamp: new Date().toLocaleString(),
-      affectedServices: newIncident.affectedServices || [],
-      rootCause: newIncident.rootCause || 'Under investigation.',
-      resolutionSteps: []
-    };
+    try {
+      const createdIncident = await IncidentService.createIncident({
+        title: newIncident.title || 'Untitled Incident',
+        severity: newIncident.severity,
+        status: 'active',
+        affectedServices: newIncident.affectedServices || [],
+        rootCause: newIncident.rootCause || 'Under investigation.'
+      });
 
-    setIncidents([report, ...incidents]);
-    setIsReporting(false);
-    setNewIncident({ title: '', severity: 'medium', status: 'active', affectedServices: [], rootCause: '' });
+      setIncidents([createdIncident, ...incidents]);
+      setIsReporting(false);
+      setNewIncident({ title: '', severity: 'medium', status: 'active', affectedServices: [], rootCause: '' });
+    } catch (err: any) {
+      alert(`Error submitting incident: ${err.message}`);
+    }
   };
 
   const getSeverityStyles = (severity: SystemIncident['severity']) => {
@@ -150,8 +215,9 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
   };
 
   const filteredIncidents = incidents.filter(inc => {
+    const incIdString = inc.id || inc._id || '';
     const matchesSearch = inc.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         inc.id.toLowerCase().includes(searchTerm.toLowerCase());
+                         incIdString.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = statusFilter === 'all' || inc.status === statusFilter;
     return matchesSearch && matchesFilter;
   });
@@ -243,6 +309,118 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
         </div>
       )}
 
+      {/* Edit Incident Modal */}
+      {isEditing && editingIncident && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setIsEditing(false)}></div>
+          <div className="relative w-full max-w-xl bg-slate-900 border border-slate-700/50 rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="absolute top-0 right-0 p-6">
+               <button onClick={() => setIsEditing(false)} className="text-slate-500 hover:text-white transition-colors">
+                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+               </button>
+            </div>
+            
+            <form onSubmit={handleEditSubmit} className="p-10 space-y-8">
+              <div>
+                <h2 className="text-2xl font-black text-white tracking-tight mb-2">Edit Incident Report</h2>
+                <p className="text-slate-400 text-sm">Update telemetry for this incident.</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Incident Title</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={editingIncident.title || ''}
+                    onChange={(e) => setEditingIncident({...editingIncident, title: e.target.value})}
+                    placeholder="Brief description of the disruption..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Severity Tier</label>
+                    <select 
+                      value={editingIncident.severity || 'medium'}
+                      onChange={(e) => setEditingIncident({...editingIncident, severity: e.target.value as any})}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="critical">Critical</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Status</label>
+                    <select 
+                      value={editingIncident.status || 'active'}
+                      onChange={(e) => setEditingIncident({...editingIncident, status: e.target.value as any})}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="active">Active</option>
+                      <option value="monitoring">Monitoring/Investigating</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Affected Services (comma separated)</label>
+                  <input 
+                    type="text" 
+                    value={(editingIncident.affectedServices || []).join(', ')}
+                    onChange={(e) => setEditingIncident({...editingIncident, affectedServices: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})}
+                    placeholder="e.g. Auth Service, API Gateway"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Core Investigation Notes</label>
+                  <textarea 
+                    rows={3}
+                    value={editingIncident.rootCause || ''}
+                    onChange={(e) => setEditingIncident({...editingIncident, rootCause: e.target.value})}
+                    placeholder="Investigation notes..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                  ></textarea>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Resolution Steps (one per line)</label>
+                  <textarea 
+                    rows={3}
+                    value={(editingIncident.resolutionSteps || []).join('\n')}
+                    onChange={(e) => setEditingIncident({...editingIncident, resolutionSteps: e.target.value.split('\n').filter(Boolean)})}
+                    placeholder="Steps taken to resolve..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="flex-1 px-4 py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-[2] px-4 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                >
+                  Update Incident
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div>
           <h1 className="text-3xl font-bold text-white mb-1">System Incidents</h1>
@@ -293,6 +471,19 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
         </div>
       </div>
 
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center p-20 animate-in fade-in duration-1000">
+           <svg className="animate-spin h-10 w-10 text-indigo-500 mb-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+           <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs">Loading Live Telemetry...</h3>
+        </div>
+      ) : error ? (
+        <div className="bg-rose-500/10 border border-rose-500/20 p-8 rounded-2xl flex flex-col items-center text-center">
+           <svg className="h-10 w-10 text-rose-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+           <h3 className="text-rose-400 font-black text-lg mb-1 tracking-tight">System Fetch Error</h3>
+           <p className="text-rose-400/80 text-sm font-medium">{error}</p>
+        </div>
+      ) : (
+
       <div className="bg-slate-800/40 border border-slate-700 rounded-[32px] overflow-hidden shadow-2xl backdrop-blur-xl">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
@@ -339,7 +530,7 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
                     </td>
                   </tr>
                   {expandedId === inc.id && (
-                    <tr className="bg-slate-900/40 border-l-4 border-indigo-500 animate-in slide-in-from-left-2 duration-300">
+                     <tr className="bg-slate-900/40 border-l-4 border-indigo-500 animate-in slide-in-from-left-2 duration-300">
                       <td colSpan={6} className="px-8 py-8 border-b border-slate-700/80">
                         <div className="flex flex-col space-y-8">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -390,12 +581,28 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
                           </div>
 
                           <div className="pt-4 flex gap-3 justify-end">
-                            <button className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 transition-all active:scale-95">
-                              Edit Report
-                            </button>
-                            <button className="px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-400 hover:text-white rounded-xl text-xs font-bold transition-all active:scale-95">
-                              Acknowledge
-                            </button>
+                            {isAdmin && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(inc);
+                                }}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 transition-all active:scale-95"
+                              >
+                                Edit Report
+                              </button>
+                            )}
+                            {isAdmin && inc.status === 'active' && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAcknowledge(String(inc.id || inc._id));
+                                }}
+                                className="px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-400 hover:text-white rounded-xl text-xs font-bold transition-all active:scale-95"
+                              >
+                                Acknowledge
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -417,6 +624,7 @@ const Incidents: React.FC<IncidentsProps> = ({ role }) => {
           </table>
         </div>
       </div>
+      )}
       
       <div className="flex justify-between items-center text-[10px] text-slate-600 font-black uppercase tracking-[0.2em] px-4">
         <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
 
-import React, { useState, useRef } from 'react';
-import { OpsDB } from '../services/dbService';
+import React, { useState, useRef, useEffect } from 'react';
+import { fetchApi } from '../utils/api';
+import { UserService } from '../services/userService';
 import { AuthService } from '../services/authService';
 
 interface SettingsProps {
@@ -8,13 +9,16 @@ interface SettingsProps {
   avatar: string;
   role: string;
   onAvatarChange: (newUrl: string) => void;
+  onProfileUpdate: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarChange }) => {
+const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarChange, onProfileUpdate }) => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  const [name, setName] = useState('');
+
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -22,6 +26,18 @@ const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarCha
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+        try {
+            const data = await UserService.getProfile();
+            setName(data.name || '');
+        } catch (err) {
+            console.error('Failed to load profile details');
+        }
+    };
+    fetchProfile();
+  }, []);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,11 +50,10 @@ const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarCha
       return;
     }
 
-    // Call Secure API logic with role-based "Middleware" enforcement
-    const result = await AuthService.changePassword(username, currentPassword, newPassword, role);
+    const result = await AuthService.changePassword(currentPassword, newPassword);
     
     if (result.success) {
-      setStatus({ type: 'success', message: 'password updated successfully' });
+      setStatus({ type: 'success', message: 'Password updated successfully' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -49,6 +64,19 @@ const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarCha
     setIsLoading(false);
   };
 
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+        await UserService.updateProfile({ name: name || undefined });
+        setStatus({ type: 'success', message: 'Profile information updated successfully' });
+        onProfileUpdate();
+    } catch (err: any) {
+        setStatus({ type: 'error', message: err.message });
+    }
+    setIsLoading(false);
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -56,9 +84,9 @@ const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarCha
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         try {
-          // Users are allowed to update their own avatar via dbService simulation
-          await OpsDB.updateUser(username, { avatarUrl: base64String }, role);
+          await UserService.updateProfile({ profileImage: base64String });
           onAvatarChange(base64String);
+          onProfileUpdate();
           setStatus({ type: 'success', message: 'Profile picture committed to database.' });
           setTimeout(() => setStatus({ type: null, message: '' }), 3000);
         } catch (e: any) {
@@ -89,26 +117,30 @@ const Settings: React.FC<SettingsProps> = ({ username, avatar, role, onAvatarCha
           <div className="w-2 h-6 bg-indigo-500 rounded-full"></div>
           Profile Identity
         </h2>
-        <div className="flex flex-col sm:flex-row items-center gap-8">
-          <div className="relative group">
-            <div className="w-32 h-32 rounded-[32px] bg-slate-900 border border-slate-700 overflow-hidden transition-all duration-500 group-hover:border-indigo-500/50 shadow-inner">
-               <img src={avatar} className="w-full h-full object-cover" alt="User profile" />
+        
+        <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row items-center gap-8 border-b border-slate-700 pb-8">
+            <div className="relative group">
+                <div className="w-32 h-32 rounded-[32px] bg-slate-900 border border-slate-700 overflow-hidden transition-all duration-500 group-hover:border-indigo-500/50 shadow-inner">
+                <img src={avatar} className="w-full h-full object-cover" alt="User profile" />
+                </div>
+                <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute -bottom-2 -right-2 bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-600/40 hover:bg-indigo-500 transition-all active:scale-90"
+                title="Change Profile Picture"
+                >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
             </div>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute -bottom-2 -right-2 bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-600/40 hover:bg-indigo-500 transition-all active:scale-90"
-              title="Change Profile Picture"
-            >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-            </button>
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-          </div>
-          <div className="flex-1 text-center sm:text-left">
-            <h3 className="text-white font-bold mb-2 uppercase tracking-widest text-xs opacity-50">Avatar Settings</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Upload a new image to personalize your dashboard profile. Changes are saved permanently.
-            </p>
-          </div>
+            <div className="flex-1 text-center sm:text-left">
+                <h3 className="text-white font-bold mb-2 uppercase tracking-widest text-xs opacity-50">Avatar Settings</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                Upload a new image to personalize your dashboard profile. Changes are saved permanently.
+                </p>
+            </div>
+            </div>
+
         </div>
       </div>
 

@@ -1,45 +1,6 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SystemNotification } from '../types';
-
-const MOCK_NOTIFICATIONS: SystemNotification[] = [
-  {
-    id: 'notif-1',
-    title: 'High API Latency Alert',
-    message: 'The AUTH-GATEWAY service is experiencing P99 latency above 250ms in US-EAST-1.',
-    timestamp: '2023-10-27 15:45:00',
-    severity: 'error',
-    isRead: false,
-    category: 'performance'
-  },
-  {
-    id: 'notif-2',
-    title: 'New User Identity Created',
-    message: 'A new user access profile was generated for the internal audit team.',
-    timestamp: '2023-10-27 15:30:12',
-    severity: 'info',
-    isRead: false,
-    category: 'security'
-  },
-  {
-    id: 'notif-3',
-    title: 'Backup Successful',
-    message: 'Daily production database snapshots completed for cluster DB-01.',
-    timestamp: '2023-10-27 12:00:00',
-    severity: 'success',
-    isRead: true,
-    category: 'maintenance'
-  },
-  {
-    id: 'notif-4',
-    title: 'Memory Threshold Warning',
-    message: 'Node-04 memory utilization reached 88%. Scaling policy check scheduled.',
-    timestamp: '2023-10-27 11:15:22',
-    severity: 'warning',
-    isRead: true,
-    category: 'resource'
-  }
-];
+import { DashboardService } from '../services/dashboardService';
 
 const NotificationItem: React.FC<{ 
   notification: SystemNotification; 
@@ -74,7 +35,7 @@ const NotificationItem: React.FC<{
       <div className="flex items-center gap-3">
         {!notification.isRead && (
           <button 
-            onClick={() => onRead(notification.id)}
+            onClick={() => onRead(notification.id || (notification as any).notificationId)}
             className="text-xs text-slate-500 hover:text-white transition-colors"
           >
             Mark as read
@@ -86,14 +47,36 @@ const NotificationItem: React.FC<{
 };
 
 const Notifications: React.FC = () => {
-  const [notifications, setNotifications] = useState<SystemNotification[]>(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+  const fetchNotifications = async () => {
+    const result = await DashboardService.getNotifications();
+    if (result.success && result.data) {
+      setNotifications(result.data.map((n: any) => ({ ...n, id: n.notificationId || n._id })));
+    }
   };
 
-  const markAllRead = () => {
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const markAsRead = async (id: string) => {
+    const result = await DashboardService.markNotificationRead(id);
+    if (result.success) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } else {
+      // Fallback for local update if API fails or if using mock IDs that aren't in DB
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    }
+  };
+
+  const markAllRead = async () => {
+    // In a real app we would have a 'markAllRead' endpoint, here we loop or just mark local
+    const unread = notifications.filter(n => !n.isRead);
+    await Promise.all(unread.map(n => DashboardService.markNotificationRead(n.id)));
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 

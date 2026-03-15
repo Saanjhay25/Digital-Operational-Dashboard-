@@ -1,12 +1,21 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { DashboardService } from '../services/dashboardService';
 
 const Infrastructure: React.FC = () => {
-  const clusters = [
-    { id: '01', name: 'US-East-Primary', nodes: 12, health: 'Optimal', cpu: 42, ram: 58 },
-    { id: '02', name: 'EU-Central-Backup', nodes: 8, health: 'Optimal', cpu: 28, ram: 44 },
-    { id: '03', name: 'APAC-Tokyo-Edge', nodes: 24, health: 'High Load', cpu: 82, ram: 71 },
-  ];
+  const [clusters, setClusters] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchClusters = async () => {
+      const result = await DashboardService.getClusters();
+      if (result.success && result.data) {
+        setClusters(result.data);
+      }
+    };
+    fetchClusters();
+    const interval = setInterval(fetchClusters, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
@@ -16,15 +25,15 @@ const Infrastructure: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {clusters.map((cluster) => (
-          <div key={cluster.id} className="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition-all group">
+        {clusters.map((cluster, idx) => (
+          <div key={cluster.clusterId || cluster.id || idx} className="bg-slate-800/50 border border-slate-700 p-6 rounded-2xl hover:border-indigo-500/50 transition-all group">
             <div className="flex justify-between items-start mb-6">
               <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
                 cluster.health === 'Optimal' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
               }`}>
                 {cluster.health}
               </div>
-              <span className="text-slate-500 font-mono text-xs">CID-{cluster.id}</span>
+              <span className="text-slate-500 font-mono text-xs">CID-{cluster.clusterId || cluster.id}</span>
             </div>
             
             <h3 className="text-xl font-bold text-white mb-4 group-hover:text-indigo-400 transition-colors">{cluster.name}</h3>
