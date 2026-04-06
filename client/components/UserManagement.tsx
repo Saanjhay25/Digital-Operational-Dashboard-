@@ -1,0 +1,291 @@
+
+import React, { useState, useEffect } from 'react';
+import { User } from '../types';
+import { fetchApi } from '../utils/api';
+import { UserService } from '../services/userService';
+
+interface UserManagementProps {
+  currentRole: string;
+}
+
+const UserManagement: React.FC<UserManagementProps> = ({ currentRole }) => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const currentLoggedUser = localStorage.getItem('opspulse_user');
+
+  // STRICT RBAC BLOCK: Absolute UI denial for non-admins
+  if (currentRole !== 'admin') {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[50vh]">
+        <div className="bg-rose-500/10 border border-rose-500/20 p-10 rounded-[32px] text-center max-w-md shadow-2xl">
+          <div className="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-rose-500/30">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+          </div>
+          <h1 className="text-xl font-bold text-white mb-2">Unauthorized Access</h1>
+          <p className="text-slate-400 text-sm">You do not have administrative privileges to manage system identities.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [newRole, setNewRole] = useState<'admin' | 'operator'>('operator');
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const { users: userList } = await UserService.getAllUsers(1, 100); // Fetch first 100 users for now
+      setUsers(userList);
+    } catch (err: any) {
+      console.error('Failed to load users:', err);
+    }
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail || !newPassword) return;
+
+    try {
+      await UserService.createUser({ 
+        email: newEmail, 
+        password: newPassword, 
+        role: newRole 
+      });
+      
+      setIsAdding(false);
+      setNewEmail('');
+      setNewPassword('');
+      loadUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleToggleStatus = async (email: string) => {
+    if (email === currentLoggedUser) {
+      alert('Action Denied: You cannot suspend your own administrative session.');
+      return;
+    }
+    try {
+      const user = users.find(u => u.email === email);
+      if (!user) return;
+      
+      await UserService.updateUser(email, { 
+        status: user.status === 'active' ? 'suspended' : 'active' 
+      });
+      loadUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRoleChange = async (email: string, currentRole: string) => {
+    if (email === currentLoggedUser) {
+      alert('Action Denied: You cannot modify your own administrative role.');
+      return;
+    }
+    try {
+      await UserService.updateUser(email, { 
+        role: currentRole === 'admin' ? 'operator' : 'admin' 
+      });
+      loadUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleResetPassword = async (email: string) => {
+    const newPass = window.prompt(`Enter new password for ${email}:`, 'Reset@123');
+    if (!newPass) return;
+
+    try {
+      const response = await fetchApi(`/users/reset-password/${email}`, {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: newPass })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Reset failed');
+      }
+
+      alert(`Password for ${email} has been reset successfully.`);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteUser = async (email: string) => {
+    if (email === currentLoggedUser) {
+      alert('Deletion Intercepted: Root accounts cannot delete themselves.');
+      return;
+    }
+    
+    if (window.confirm(`Are you sure you want to PERMANENTLY delete user "${email}"?`)) {
+      try {
+        await UserService.deleteUser(email);
+        loadUsers();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
+  return (
+    <div className="p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">Identity Management</h1>
+          <p className="text-slate-400">Manage operational access, roles, and account status.</p>
+        </div>
+        {!isAdding && (
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 active:scale-95"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+            Provision New Identity
+          </button>
+        )}
+      </div>
+
+      {isAdding && (
+        <div className="bg-slate-900 border border-indigo-500/30 p-8 rounded-[32px] animate-in slide-in-from-top-4 duration-300 shadow-2xl">
+          <h2 className="text-lg font-bold text-white mb-6">New User Provisioning</h2>
+          <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Email Address</label>
+              <input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="admin@example.com" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">System Role</label>
+              <select value={newRole} onChange={(e) => setNewRole(e.target.value as any)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="operator">Operator</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Password</label>
+              <div className="relative">
+                <input 
+                  type={showNewPassword ? 'text' : 'password'} 
+                  required 
+                  value={newPassword} 
+                  onChange={(e) => setNewPassword(e.target.value)} 
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="••••••••" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-400 transition-colors"
+                >
+                  {showNewPassword ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold">Create</button>
+              <button type="button" onClick={() => setIsAdding(false)} className="bg-slate-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-slate-800/50 border border-slate-700 rounded-[32px] overflow-hidden shadow-2xl backdrop-blur-sm">
+        <table className="w-full text-left">
+          <thead className="bg-slate-900/80 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b border-slate-700">
+            <tr>
+              <th className="px-8 py-5">Identity</th>
+              <th className="px-8 py-5">Role</th>
+              <th className="px-8 py-5">Status</th>
+              <th className="px-8 py-5 text-right">Control Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-700/50 text-slate-300 text-sm">
+            {users.map((user) => (
+              <tr key={user.email} className="hover:bg-slate-700/20 transition-all">
+                <td className="px-8 py-5 font-bold text-white">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center border bg-slate-700/50 border-slate-600">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    </div>
+                    {user.email}
+                  </div>
+                </td>
+                <td className="px-8 py-5">
+                   <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${
+                     user.role === 'admin' ? 'text-indigo-400 bg-indigo-900/20 border-indigo-500/20' : 'text-emerald-400 bg-emerald-900/20 border-emerald-500/20'
+                   }`}>
+                     {user.role}
+                   </span>
+                </td>
+                <td className="px-8 py-5">
+                   <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg border ${
+                     user.status === 'active' ? 'text-emerald-400 bg-emerald-900/20 border-emerald-500/20' : 'text-rose-400 bg-rose-900/20 border-rose-500/20'
+                   }`}>
+                     {user.status}
+                   </span>
+                </td>
+                <td className="px-8 py-5 text-right">
+                  {user.email !== currentLoggedUser && (
+                    <div className="flex items-center justify-end gap-3">
+                      <button 
+                        onClick={() => handleRoleChange(user.email, user.role)}
+                        className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-xl border transition-all ${
+                          user.role === 'admin' 
+                            ? 'text-indigo-400 border-indigo-500/20 hover:bg-emerald-500 hover:text-white' 
+                            : 'text-emerald-400 border-emerald-500/20 hover:bg-indigo-500 hover:text-white'
+                        }`}
+                        title={user.role === 'admin' ? 'Demote to Operator' : 'Promote to Admin'}
+                      >
+                        {user.role === 'admin' ? 'Demote' : 'Promote'}
+                      </button>
+                      <button 
+                        onClick={() => handleToggleStatus(user.email)}
+                        className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded-xl border transition-all ${
+                          user.status === 'active' 
+                            ? 'text-rose-400 bg-rose-900/20 border-rose-500/20 hover:bg-rose-500 hover:text-white' 
+                            : 'text-emerald-400 bg-emerald-900/20 border-emerald-500/20 hover:bg-emerald-500 hover:text-white'
+                        }`}
+                      >
+                        {user.status === 'active' ? 'Suspend' : 'Activate'}
+                      </button>
+                      <button 
+                        onClick={() => handleResetPassword(user.email)}
+                        className="text-[10px] font-bold uppercase px-3 py-1.5 rounded-xl border border-slate-700 hover:bg-slate-700 transition-all text-slate-400"
+                        title="Reset User Password"
+                      >
+                        Reset
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteUser(user.email)}
+                        className="p-1.5 text-slate-500 hover:text-rose-500 transition-colors"
+                        title="Delete User"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default UserManagement;
