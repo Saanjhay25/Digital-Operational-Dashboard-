@@ -17,7 +17,8 @@ const LEVEL_STYLES: Record<string, { badge: string; dot: string; row: string; la
   error:   { badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30',           dot: 'bg-rose-500',    row: 'hover:bg-rose-500/5',    label: '🔴 ERROR' },
 };
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL.replace('/api', '');
+const API_URL = import.meta.env.VITE_API_URL;
 
 const LogMonitor: React.FC = () => {
   const [logs, setLogs]             = useState<AppLog[]>([]);

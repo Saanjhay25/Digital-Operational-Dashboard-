@@ -1,0 +1,16 @@
+Retrieving project…
+Deploying saanjhay25s-projects/opspulse-digital-operational-system
+Uploading [--------------------] (0.0B/487B)
+Uploading [====================] (487.0B/487B)
+Inspect: https://vercel.com/saanjhay25s-projects/opspulse-digital-operational-system/FQNKi66EUs6HcmH7T9hFD4Tiu7Km [2s]
+Production: https://opspulse-digital-operational-system-evgfbgp73.vercel.app [2s]
+https://opspulse-digital-operational-system-evgfbgp73.vercel.appBuilding...
+Building...
+[2K[1A[2K[GProduction: https://opspulse-digital-operational-system-evgfbgp73.vercel.app [51s]
+Completing...
+Aliased: https://opspulse-digital-operational-system.vercel.app [51s]
+Due to `builds` existing in your configuration file, the Build and Development Settings defined in your Project Settings will not apply. Learn More: https://vercel.link/unused-build-settings
+
+Common next commands:
+- `vercel inspect opspulse-digital-operational-system-evgfbgp73.vercel.app --logs`
+- `vercel redeploy opspulse-digital-operational-system-evgfbgp73.vercel.app`

@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: opspulse-backend
+    runtime: node
+    region: oregon
+    plan: free
+
+    # Build: install deps + compile TypeScript
+    buildCommand: npm install && npm run build
+
+    # Start: run compiled JS
+    startCommand: npm start
+
+    # Health check endpoint
+    healthCheckPath: /ping
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: false
+        # Render sets PORT automatically — do NOT hardcode it
+      - key: MONGO_URI
+        sync: false          # Set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false          # Set manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false          # Set to your Vercel URL, e.g. https://opspulse.vercel.app
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false

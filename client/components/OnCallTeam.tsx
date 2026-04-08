@@ -22,7 +22,7 @@ const OnCallTeam: React.FC<OnCallTeamProps> = ({ role }) => {
 
   const fetchOperators = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/operators', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/users/operators`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

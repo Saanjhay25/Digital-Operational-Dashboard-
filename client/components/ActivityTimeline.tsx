@@ -23,7 +23,7 @@ const ActivityTimeline: React.FC = () => {
   useEffect(() => {
     fetchActivities();
 
-    const socket = io('http://localhost:5000');
+    const socket = io(import.meta.env.VITE_API_URL.replace('/api', ''));
     socket.on('activity_log_created', (newActivity: ActivityLog) => {
       setActivities(prev => [newActivity, ...prev].slice(0, 50));
     });
@@ -35,7 +35,7 @@ const ActivityTimeline: React.FC = () => {
 
   const fetchActivities = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/activity', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/activity`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
