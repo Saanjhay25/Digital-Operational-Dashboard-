@@ -145,7 +145,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                 theme="filled_black"
                 shape="pill"
                 size="large"
-                width="100%"
+                width="350"
               />
             </div>
           </form>
