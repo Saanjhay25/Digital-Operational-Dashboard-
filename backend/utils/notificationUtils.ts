@@ -18,13 +18,13 @@ const transporter = nodemailer.createTransport({
 const slackWebhook = process.env.SLACK_WEBHOOK_URL ? new IncomingWebhook(process.env.SLACK_WEBHOOK_URL) : null;
 
 // WhatsApp setup
-const twilioClient = (process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN) 
-    ? twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN) 
+const twilioClient = (process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN)
+    ? twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN)
     : null;
 
 export const sendEmailAlert = async (to: string, subject: string, message: string) => {
     // Skip if dummy credentials are used
-    if (!process.env.EMAIL_USER || process.env.EMAIL_USER === 'your-gmail@gmail.com' || 
+    if (!process.env.EMAIL_USER || process.env.EMAIL_USER === 'your-gmail@gmail.com' ||
         !process.env.EMAIL_PASS || process.env.EMAIL_PASS === 'your-gmail-app-password') {
         console.log(`[Email Skipped] Missing valid credentials. Would have sent email to ${to}`);
         return;
@@ -104,7 +104,7 @@ export const createNotification = async (data: { title: string; message: string;
         // Emit via Socket.IO
         if (io) {
             io.emit('new_notification', notification);
-            
+
             // Trigger specific events as per requirements
             if (data.type === 'critical') {
                 io.emit('system_failure', notification);

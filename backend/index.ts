@@ -68,7 +68,7 @@ const port = process.env.PORT || 5000;
 const httpServer = createServer(app);
 export const io = new Server(httpServer, {
     cors: {
-        origin: "https://digital-operational-dashboard.vercel.app",
+        origin: true,
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -105,16 +105,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-    origin: (origin, callback) => {
-      
-        // Allow requests with no origin (Postman, curl, server-to-server)
-        if (!origin) return callback(null, true);
-        // Allow any *.vercel.app subdomain
-        if (origin.endsWith('.vercel.app')) return callback(null, true);
-        // Allow explicitly listed origins
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-        return callback(new Error(`CORS blocked: ${origin}`));
-    },
+    origin: true,
     credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
