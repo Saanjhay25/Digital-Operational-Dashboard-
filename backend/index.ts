@@ -72,7 +72,7 @@ export const io = new Server(httpServer, {
         methods: ["GET", "POST"],
         credentials: true
     }
-});
+}); 
 
 io.on('connection', (socket) => {
     console.log('Client connected as: ', socket.id);
