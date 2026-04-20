@@ -106,6 +106,7 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
+      
         // Allow requests with no origin (Postman, curl, server-to-server)
         if (!origin) return callback(null, true);
         // Allow any *.vercel.app subdomain
